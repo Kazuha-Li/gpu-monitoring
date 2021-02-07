@@ -1,0 +1,59 @@
+# version is now using "compose spec"
+# v2 and v3 are now combined!
+# docker-compose v1.27+ required
+
+services:
+  nvidia-dcgm-exporter:
+    image: bgbiao/dcgm-exporter
+    runtime: nvidia
+    container_name: nvidia-dcgm-exporter
+    networks:
+      - gpu-monitor
+
+  gpu_monitor:
+    image: bgbiao/gpu-metrics-exporter
+    container_name: gpu_monitor
+    depends_on:
+      - nvidia-dcgm-exporter
+    volumes_from:
+      - nvidia-dcgm-exporter:ro
+    ports:
+      - "9400:9400"
+    userns_mode: "host"
+    privileged: true
+    networks:
+      - gpu-monitor
+  
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    depends_on:
+      - gpu_monitor
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    ports:
+      - "9090:9090"
+    networks:
+      - gpu-monitor
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - gpu_monitor
+      - prometheus
+    ports:
+      - "3000:3000"
+    networks:
+      - gpu-monitor
+
+volumes:
+  grafana_data:
+
+# 加入自己建立的 network 才能互相用 container name 訪問
+networks:
+  gpu-monitor:
